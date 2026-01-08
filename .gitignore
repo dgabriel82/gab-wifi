@@ -1,0 +1,26 @@
+# Secrets
+.env
+*.env
+.env.*
+
+# DB data
+pgdata/
+*.sqlite
+*.db
+
+# TLS / certs
+letsencrypt/
+certbot/
+*.pem
+*.key
+
+# Node
+portal/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

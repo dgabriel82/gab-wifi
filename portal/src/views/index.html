@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Wi-Fi invité — Connexion</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 2rem; max-width: 760px; }
+    .box { border: 1px solid #ddd; border-radius: 12px; padding: 1.25rem; }
+    button { padding: .75rem 1rem; border-radius: 10px; border: 0; cursor: pointer; }
+    .muted { color:#555; font-size:.95rem; }
+    .small { font-size:.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Wi-Fi invité</h1>
+  <div class="box">
+    <p class="muted">
+      Pour accéder à Internet via <strong>gab-invite</strong>, veuillez vous authentifier avec Google.
+    </p>
+
+    <h2>Information RGPD</h2>
+    <p class="small">
+      <strong>Finalité</strong> : accès Wi-Fi invité et prévention d’abus/sécurité réseau.<br/>
+      <strong>Données</strong> : identifiant Google (sub), email (si fourni), adresse MAC, SSID/AP, horodatage, durée d’accès.<br/>
+      <strong>Durée de conservation</strong> : <span id="retentionDays"></span> jours.<br/>
+      <strong>Responsable</strong> : propriétaire/administrateur du réseau Wi-Fi.<br/>
+      <strong>Droits</strong> : accès/suppression selon le cadre légal et les contraintes de sécurité.
+    </p>
+
+    <form method="POST" action="/start">
+      <label>
+        <input type="checkbox" name="consent" value="yes" required />
+        J’ai lu et j’accepte les conditions ci-dessus.
+      </label>
+      <br/><br/>
+      <button type="submit">Se connecter avec Google</button>
+    </form>
+
+    <p class="muted small" style="margin-top:1rem;">
+      Si la fenêtre captive ne fonctionne pas, ouvrez <code>https://PORTAIL</code> dans votre navigateur.
+    </p>
+  </div>
+
+  <script>
+    document.getElementById("retentionDays").textContent = "{{RETENTION_DAYS}}";
+  </script>
+</body>
+</html>

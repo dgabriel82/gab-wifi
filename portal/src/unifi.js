@@ -6,65 +6,110 @@ const UNIFI_SITE = process.env.UNIFI_SITE || "default";
 const USERNAME = process.env.UNIFI_USERNAME;
 const PASSWORD = process.env.UNIFI_PASSWORD;
 
-// Autoriser TLS non vérifié UNIQUEMENT pour UniFi (cert auto-signé)
 const INSECURE_TLS = (process.env.UNIFI_INSECURE_TLS || "true").toLowerCase() === "true";
 
 if (!UNIFI_BASE_URL || !USERNAME || !PASSWORD) {
   throw new Error("UNIFI_CONTROLLER_URL / UNIFI_USERNAME / UNIFI_PASSWORD manquants");
 }
 
-// Agent HTTPS custom
 const httpsAgent = new https.Agent({
-  rejectUnauthorized: !INSECURE_TLS
+  rejectUnauthorized: !INSECURE_TLS,
 });
 
-// Client axios avec cookie jar implicite (axios garde les cookies par instance)
 const client = axios.create({
   baseURL: UNIFI_BASE_URL,
   timeout: 10000,
-  withCredentials: true,
   httpsAgent,
-  headers: {
-    "Content-Type": "application/json"
-  }
+  headers: { "Content-Type": "application/json" },
+  validateStatus: () => true,
 });
 
-/**
- * Login UniFi (UniFi OS)
- * POST /api/auth/login
- */
-async function login() {
-  await client.post("/api/auth/login", {
-    username: USERNAME,
-    password: PASSWORD,
-    remember: true
-  });
+let cookieHeader = null; // ex: "TOKEN=...."
+let csrfToken = null;    // ex: "5ad0...."
+
+function extractTokenCookie(setCookieHeaders) {
+  if (!setCookieHeaders) return null;
+  const arr = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+
+  // on ne garde que le cookie TOKEN=...
+  const token = arr
+    .map((c) => String(c).split(";")[0].trim())
+    .find((kv) => kv.startsWith("TOKEN="));
+
+  return token || null;
 }
 
-/**
- * Autorise un client invité
- * @param {string} mac - MAC address du client
- * @param {number} minutes - durée d'autorisation
- */
+async function login() {
+  const res = await client.post("/api/auth/login", {
+    username: USERNAME,
+    password: PASSWORD,
+    remember: true,
+  });
+
+  if (res.status !== 200) {
+    const code = res?.data?.code;
+    const msg = res?.data?.message;
+    throw new Error(`UniFi login failed (${res.status}) ${code || ""} ${msg || ""}`.trim());
+  }
+
+  const tokenCookie = extractTokenCookie(res.headers?.["set-cookie"]);
+  if (!tokenCookie) throw new Error("UniFi login OK mais cookie TOKEN absent.");
+
+  cookieHeader = tokenCookie;
+
+  // UniFi OS renvoie le CSRF token dans les headers
+  csrfToken =
+    res.headers?.["x-updated-csrf-token"] ||
+    res.headers?.["x-csrf-token"] ||
+    null;
+
+  if (!csrfToken) {
+    // parfois pas strictement nécessaire selon endpoint, mais pour /proxy/network c'est souvent requis
+    throw new Error("UniFi login OK mais CSRF token absent (x-csrf-token).");
+  }
+
+  return true;
+}
+
+async function postNetwork(path, body) {
+  if (!cookieHeader || !csrfToken) await login();
+
+  const res = await client.post(path, body, {
+    headers: {
+      Cookie: cookieHeader,
+      "X-Csrf-Token": csrfToken,
+    },
+  });
+
+  // Session expirée -> relogin + retry une fois
+  if (res.status === 401 || res.status === 403) {
+    cookieHeader = null;
+    csrfToken = null;
+    await login();
+
+    const retry = await client.post(path, body, {
+      headers: {
+        Cookie: cookieHeader,
+        "X-Csrf-Token": csrfToken,
+      },
+    });
+    return retry;
+  }
+
+  return res;
+}
+
 async function authorizeGuest(mac, minutes) {
   if (!mac) throw new Error("MAC manquante pour authorizeGuest");
 
-  // Login (cookie de session)
-  await login();
-
-  // Endpoint UniFi OS + Network
-  const url = `/proxy/network/api/s/${UNIFI_SITE}/cmd/stamgr`;
-
-  const payload = {
+  const res = await postNetwork(`/proxy/network/api/s/${UNIFI_SITE}/cmd/stamgr`, {
     cmd: "authorize-guest",
     mac,
-    minutes
-  };
+    minutes,
+  });
 
-  const res = await client.post(url, payload);
-
-  if (!res.data || res.data.meta?.rc !== "ok") {
-    throw new Error(`Échec authorizeGuest: ${JSON.stringify(res.data)}`);
+  if (res.status !== 200 || res.data?.meta?.rc !== "ok") {
+    throw new Error(`UniFi authorize-guest failed: status=${res.status} body=${JSON.stringify(res.data)}`);
   }
 
   return true;

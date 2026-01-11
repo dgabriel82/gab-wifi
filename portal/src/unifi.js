@@ -1,86 +1,73 @@
 const axios = require("axios");
-const { wrapper } = require("axios-cookiejar-support");
-const { CookieJar } = require("tough-cookie");
+const https = require("https");
 
-function normalizeMac(mac) {
-  return (mac || "").trim().toLowerCase();
+const UNIFI_BASE_URL = process.env.UNIFI_CONTROLLER_URL; // ex: https://192.168.1.1
+const UNIFI_SITE = process.env.UNIFI_SITE || "default";
+const USERNAME = process.env.UNIFI_USERNAME;
+const PASSWORD = process.env.UNIFI_PASSWORD;
+
+// Autoriser TLS non vérifié UNIQUEMENT pour UniFi (cert auto-signé)
+const INSECURE_TLS = (process.env.UNIFI_INSECURE_TLS || "true").toLowerCase() === "true";
+
+if (!UNIFI_BASE_URL || !USERNAME || !PASSWORD) {
+  throw new Error("UNIFI_CONTROLLER_URL / UNIFI_USERNAME / UNIFI_PASSWORD manquants");
 }
 
-function buildClient(baseURL) {
-  const jar = new CookieJar();
-  const c = wrapper(axios.create({
-    baseURL,
-    jar,
-    withCredentials: true,
-    timeout: 15000,
-    validateStatus: () => true
-  }));
-  return c;
-}
+// Agent HTTPS custom
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: !INSECURE_TLS
+});
 
-async function loginUniFi(client, username, password) {
-  // UniFi OS (newer): POST /api/auth/login
-  // Legacy: POST /api/login
-  const payload = { username, password };
+// Client axios avec cookie jar implicite (axios garde les cookies par instance)
+const client = axios.create({
+  baseURL: UNIFI_BASE_URL,
+  timeout: 10000,
+  withCredentials: true,
+  httpsAgent,
+  headers: {
+    "Content-Type": "application/json"
+  }
+});
 
-  let r = await client.post("/api/auth/login", payload, {
-    headers: { "Content-Type": "application/json" }
+/**
+ * Login UniFi (UniFi OS)
+ * POST /api/auth/login
+ */
+async function login() {
+  await client.post("/api/auth/login", {
+    username: USERNAME,
+    password: PASSWORD,
+    remember: true
   });
-
-  if (r.status >= 200 && r.status < 300) return true;
-
-  // Try legacy
-  r = await client.post("/api/login", payload, {
-    headers: { "Content-Type": "application/json" }
-  });
-
-  if (r.status >= 200 && r.status < 300) return true;
-
-  throw new Error(`UniFi login failed (status ${r.status})`);
 }
 
 /**
- * Authorize guest client (MAC) for N minutes.
- * Works on UniFi Network API via /proxy/network/api/s/<site>/cmd/stamgr (UniFi OS) or /api/s/<site>/cmd/stamgr (legacy).
+ * Autorise un client invité
+ * @param {string} mac - MAC address du client
+ * @param {number} minutes - durée d'autorisation
  */
 async function authorizeGuest(mac, minutes) {
-  const controller = process.env.UNIFI_CONTROLLER_URL; // ex: https://192.168.1.1
-  const site = process.env.UNIFI_SITE || "default";
-  const username = process.env.UNIFI_USERNAME;
-  const password = process.env.UNIFI_PASSWORD;
+  if (!mac) throw new Error("MAC manquante pour authorizeGuest");
 
-  if (!controller || !username || !password) {
-    throw new Error("UniFi env not set (UNIFI_CONTROLLER_URL/UNIFI_USERNAME/UNIFI_PASSWORD)");
-  }
+  // Login (cookie de session)
+  await login();
 
-  const m = normalizeMac(mac);
-  const nMinutes = Math.max(1, parseInt(minutes || "480", 10)); // default 8h
+  // Endpoint UniFi OS + Network
+  const url = `/proxy/network/api/s/${UNIFI_SITE}/cmd/stamgr`;
 
-  const client = buildClient(controller);
-
-  await loginUniFi(client, username, password);
-
-  const body = {
+  const payload = {
     cmd: "authorize-guest",
-    mac: m,
-    minutes: nMinutes
+    mac,
+    minutes
   };
 
-  // UniFi OS path
-  let r = await client.post(`/proxy/network/api/s/${site}/cmd/stamgr`, body, {
-    headers: { "Content-Type": "application/json" }
-  });
+  const res = await client.post(url, payload);
 
-  if (r.status >= 200 && r.status < 300) return true;
+  if (!res.data || res.data.meta?.rc !== "ok") {
+    throw new Error(`Échec authorizeGuest: ${JSON.stringify(res.data)}`);
+  }
 
-  // Legacy path fallback
-  r = await client.post(`/api/s/${site}/cmd/stamgr`, body, {
-    headers: { "Content-Type": "application/json" }
-  });
-
-  if (r.status >= 200 && r.status < 300) return true;
-
-  throw new Error(`UniFi authorize failed (status ${r.status})`);
+  return true;
 }
 
 module.exports = { authorizeGuest };

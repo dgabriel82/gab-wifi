@@ -1,102 +1,31 @@
 services:
-:  nginx:
-    image: nginx:alpine
-    container_name: wifi_nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./letsencrypt:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    depends_on:
-      - portal
-    restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: wifi_certbot
-    volumes:
-      - ./letsencrypt:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: /bin/sh -c
-    command: "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done"
-    restart: unless-stopped
-
   portal:
-    image: ghcr.io/tonrepo/unifi-guest-portal:latest # ou build: .
+    build:
+      context: ./portal
     container_name: wifi_portal
     environment:
       - PORT=3000
       - BASE_URL=https://gab-wifi.duckdns.org
-      - GOOGLE_CLIENT_ID=326119130358-erk0cnln2kfkt46d090d164e3casmtqe.apps.googleusercontent.com
-      - GOOGLE_CLIENT_SECRET=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
+      - COOKIE_SECRET=change-me-please
+
+      - GOOGLE_CLIENT_ID=__A_REMPLIR__
+      - GOOGLE_CLIENT_SECRET=__A_REMPLIR__
       - GOOGLE_REDIRECT_URI=https://gab-wifi.duckdns.org/auth/google/callback
+
       - DATABASE_URL=postgres://portal:portalpass@db:5432/portaldb
-      - UNIFI_CONTROLLER_URL=https://unifi.gabriel.lan:443
-      - UNIFI_SITE=default
-      - UNIFI_USERNAME=davidgabriel
-      - UNIFI_PASSWORD=nDi#xI4xy$0F
-      - CONSENT_VERSION=1.0
       - RETENTION_DAYS=180
+      - CONSENT_VERSION=1.0
+      - DEFAULT_MINUTES=480
+
+      - UNIFI_CONTROLLER_URL=https://192.168.1.1
+      - UNIFI_SITE=default
+      - UNIFI_USERNAME=__A_REMPLIR__
+      - UNIFI_PASSWORD=__A_REMPLIR__
     depends_on:
       - db
     restart: unless-stopped
-
-  db:
-    image: postgres:16-alpine
-    container_name: wifi_db
-    environment:
-      - POSTGRES_DB=portaldb
-      - POSTGRES_USER=portal
-      - POSTGRES_PASSWORD=portalpass
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
-services:
-  nginx:
-    image: nginx:alpine
-    container_name: wifi_nginx
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./letsencrypt:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    depends_on:
-      - portal
-    restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: wifi_certbot
-    volumes:
-      - ./letsencrypt:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: /bin/sh -c
-    command: "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; done"
-    restart: unless-stopped
-
-  portal:
-    image: ghcr.io/tonrepo/unifi-guest-portal:latest # ou build: .
-    container_name: wifi_portal
-    environment:
-      - PORT=3000
-      - BASE_URL=https://gab-wifi.duckdns.org
-      - GOOGLE_CLIENT_ID=326119130358-erk0cnln2kfkt46d090d164e3casmtqe.apps.googleusercontent.com
-      - GOOGLE_CLIENT_SECRET=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
-      - GOOGLE_REDIRECT_URI=https://gab-wifi.duckdns.org/auth/google/callback
-      - DATABASE_URL=postgres://portal:portalpass@db:5432/portaldb
-      - UNIFI_CONTROLLER_URL=https://<IP_CGU>:443
-      - UNIFI_SITE=default
-      - UNIFI_USERNAME=davidgabriel
-      - UNIFI_PASSWORD=nDi#xI4xy$0F
-      - CONSENT_VERSION=1.0
-      - RETENTION_DAYS=180
-    depends_on:
-      - db
-    restart: unless-stopped
+      - "80:3000"
 
   db:
     image: postgres:16-alpine

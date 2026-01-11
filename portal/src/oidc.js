@@ -1,19 +1,31 @@
-const { Issuer } = require("openid-client");
-
-let client;
+let cached;
 
 async function getClient() {
-  if (client) return client;
+  if (cached) return cached;
 
-  const issuer = await Issuer.discover("https://accounts.google.com");
-  client = new issuer.Client({
-    client_id: process.env.GOOGLE_CLIENT_ID,
-    client_secret: process.env.GOOGLE_CLIENT_SECRET,
-    redirect_uris: [process.env.GOOGLE_REDIRECT_URI],
-    response_types: ["code"],
-  });
+  const oidc = await import("openid-client");
 
-  return client;
+  if (typeof oidc.discovery !== "function") {
+    throw new Error("openid-client v6: discovery() introuvable");
+  }
+
+  const issuerBase = new URL("https://accounts.google.com");
+
+  // v6: discovery() retourne une "Configuration"
+  // client_id / client_secret sont passés ici (client auth explicite en v6)
+  const config = await oidc.discovery(
+    issuerBase,
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+
+  cached = {
+    oidc,
+    config,
+    redirectUri: process.env.GOOGLE_REDIRECT_URI,
+  };
+
+  return cached;
 }
 
 module.exports = { getClient };

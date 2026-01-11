@@ -9,6 +9,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./certbot/www:/var/www/certbot
       - ./letsencrypt:/etc/letsencrypt
+      - ./nginx/auth/.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
       - portal
     restart: unless-stopped

@@ -151,6 +151,34 @@ docker compose down
 - Hébergement local
 
 ---
+## Première génération du certificat (one-shot)
+
+👉 Important : le domaine doit déjà pointer vers ton serveur (DuckDNS OK).
+
+### 1 Lance Nginx sans HTTPS actif (le fichier peut rester tel quel)
+
+docker compose up -d nginx
+
+### 2 Génère le certificat :
+
+docker compose run --rm certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  -d gab-wifi.duckdns.org \
+  --email toi@exemple.ch \
+  --agree-tos \
+  --no-eff-email
+
+
+Si tout va bien :
+
+Congratulations! Your certificate and chain have been saved at:
+
+
+### 3 Redémarre tout :
+
+docker compose down
+docker compose up -d
 
 ## 🧑‍💻 Auteur
 Projet pédagogique et professionnel – Portail captif UniFi moderne et extensible.

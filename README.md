@@ -1,13 +1,13 @@
-# Gab WiFi – Portail captif UniFi avec authentification Google (OIDC)
+# Gab WiFi – Portail captif UniFi avec authentification Google ou Azure (OIDC)
 
 Ce projet implémente un **portail captif WiFi auto‑hébergé** pour UniFi (Cloud Gateway Ultra / UniFi OS),
-permettant l’authentification des invités via **Google OpenID Connect**, avec journalisation conforme RGPD
+permettant l’authentification des invités via **OpenID Connect**, avec journalisation conforme RGPD
 et interface d’administration protégée par mot de passe.
 
 ---
 
 ## 🎯 Objectifs
-- Authentifier les invités WiFi via un compte Google
+- Authentifier les invités WiFi via un compte Google ou Azure
 - Autoriser automatiquement les clients via l’API UniFi
 - Journaliser les connexions (audit / RGPD)
 - Hébergement local, déploiement Docker
@@ -28,8 +28,8 @@ flowchart LR
     Nginx["Nginx HTTPS"]
 
     Client --> AP --> Portal
-    Portal --> Google
-    Google --> Portal
+    Portal --> Google or Azure
+    Azure ir Google --> Portal
     Portal --> UniFi
     Portal --> DB
     Nginx --> Portal
@@ -44,7 +44,7 @@ sequenceDiagram
     participant C as Client
     participant U as UniFi
     participant P as Portail
-    participant G as Google
+    participant G as Google or Azure
     participant D as DB
 
     C->>U: Connexion SSID invité
@@ -106,11 +106,16 @@ gab-wifi/
   `https://gab-wifi.duckdns.org/`
 
 ### Walled Garden
-Autoriser :
+Autoriser pour gmail :
 - `accounts.google.com`
 - `oauth2.googleapis.com`
 - `*.googleusercontent.com`
 - domaine du portail
+
+Autoriser pour Azure :
+- login.microsoftonline.com
+- *.msauth.net
+- *.msftauth.net
 
 ### Compte UniFi
 - Compte **local** (pas SSO)
